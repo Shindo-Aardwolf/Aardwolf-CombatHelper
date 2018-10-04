@@ -1,0 +1,254 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<blowtorch xmlversion="2">
+  <plugins>
+    <plugin name="combat_plugin" id="1153">
+      <author>Shindo</author>
+      <description><![CDATA[
+        <html>
+          <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+            <title>Combat Helper Plugin</title>
+            <style type="text/css">
+              body {
+              color: #999;
+              }
+            </style>
+          </head>
+
+          <body>
+            <h3>Combat Helper</h3)
+            <p>This plugin updates your combat spells/skills when you level.</p>
+            <p>This was inspired by Throxx and will be expanded as time goes by.</p>
+          </body>
+        </html>
+        ]]>
+      </description>
+      <aliases>
+        <alias pre="^srep$" post="/reportSession()" enabled="true" />
+      </aliases>
+      <triggers>
+        <trigger title="player_leveled"
+          pattern ="^You raise a level\! You are now level (\d+)\.$"
+          regexp="true" sequence="1"  keepEvaluting="true">
+          <script function="gained_level" fireWhen="always" />
+        </trigger>
+        <trigger title="levelGainNormal"
+          pattern ="^You gain (\d+) hit points\, (\d+) mana\, (\d+) moves\, (\d+) practices? and (\d+) trains?\.$"
+          regexp="true" sequence="1"  keepEvaluting="true" group="LevelUp">
+          <script function="levelGainsNormal" fireWhen="always" />
+        </trigger>
+        <trigger title="levelGainLucky"
+          pattern ="^Lucky\! You gain an extra (\d+) training sessions?\!$"
+          regexp="true" sequence="1"  keepEvaluting="true" group="LevelUp">
+          <script function="levelGainsLucky" fireWhen="always" />
+        </trigger>
+        <trigger title="levelGainBonus"
+          pattern ="^You gain (\d+) extra trains? daily blessing bonus\.$"
+          regexp="true" sequence="1"  keepEvaluting="true" group="LevelUp">
+          <script function="levelGainsBonus" fireWhen="always" />
+        </trigger>
+        <trigger title="levelGainsEnd"
+          pattern ="^\[.*\] \>.*$"
+          regexp="true" sequence="1"  keepEvaluting="true" group="LevelUp">
+          <script function="levelGainsEnd" fireWhen="always" />
+        </trigger>
+        <trigger title="PlayerInfo01"
+          pattern="%char.base"
+          sequence="1" keepEvaluating="true">
+          <script function="updatePlayerInfo" fireWhen="always"/>
+        </trigger>
+        <trigger title="startPUPDataCapture"
+          pattern="^Congratulations\, hero\..*$"
+          regexp="true" sequence="1" keepEvaluating="true">
+          <script function="startPUPCapture" fireWhen="always"/>
+        </trigger>
+        <trigger title="pupDataCapture"
+          pattern="^You gain (\d+) trains?\.$"
+          regexp="true" sequence="1" keepEvaluating="true" group="PUPCapture">
+          <script function="addPUPNormal" fireWhen="always"/>
+        </trigger>
+        <trigger title="pupDataCaptureLucky"
+          pattern="^Lucky\! You gain an extra (\d+) training sessions?\!$"
+          regexp="true" sequence="1" keepEvaluating="true" group="PUPCapture">
+          <script function="addPUPLucky" fireWhen="always"/>
+        </trigger>
+        <trigger title="pupDataCaptureBonus"
+          pattern ="^You gain (\d+) extra trains? daily blessing bonus\.$"
+          regexp="true" sequence="1"  keepEvaluting="true" group="PUPCapture">
+          <script function="addPUPBonus" fireWhen="always" />
+        </trigger>
+         <trigger title="endPUPDataCapture"
+          pattern="^INFO\:.*$"
+          regexp="true" sequence="1" keepEvaluating="true" group="PUPCapture">
+          <script function="endPUPCapture" fireWhen="always"/>
+        </trigger> 
+    </triggers>
+      <script name="bootstrap" execute="true"><![CDATA[
+        local MyTier = 0
+        local MyClass = ""
+        local MySubclass = ""
+        local AdjustedLevel = 0
+        local MySpells = {
+        ["Psionicist"] = {{7, 127}, {9, 131}, {12, 115}, {21, 122}, {60, 354},
+        {65, 128}, {73, 136}, {94, 357}, {108, 356}, {151, 360}, {179, 362}},
+        ["Warrior"] = {{1, "kick"}, {11, "bash"}, {17, "dirt"}, {27, "stun"},
+        {39, "trip"}, {50, "sap"}, {79,"spunch"}, {101, "uppercut"}, {112, "headbut"},
+        {137,"stomp"}, {151, "bodycheck"}, {178, "hammering"}},
+        ["Thief"] = {{1, "kobold"},},
+        ["Ranger"] = {{1, "kick"},},
+        ["Mage"] = {{1, 62},},
+        ["Cleric"] = {{1, 12},},
+        ["Paladin"] = {{1, "kick"},},
+        }
+        local newlevel = 0
+
+        local SessionStats = {}
+        local SessionTotals = {}
+        local currentPUPData = {}
+        local currentLevelData = {}
+
+        function startPUPCapture(name, line, WildCards)
+          --data we want to be able to save in to the session table
+          currentPUPData.puptime = os.time()
+          currentPUPData.trains = 0
+          currentPUPData.luckytrains = 0
+          currentPUPData.bonustrains = 0
+          currentPUPData.practices = 0
+          EnableTriggerGroup("PUPCapture", true)
+        end
+
+        function addPUPNormal(name, line, WildCards)
+          local trains = tonumber(WildCards["1"])
+          currentPUPData.trains = trains
+        end
+
+        function addPUPLucky(name, line, WildCards)
+          local trains = tonumber(WildCards["1"])
+          currentPUPData.luckytrains = trains
+        end
+
+        function addPUPBonus(name, line, WildCards)
+          local trains = tonumber(WildCards["1"])
+          currentPUPData.bonustrains = trains
+        end
+
+        function endPUPCapture(name, line, WildCards)
+          --[[for name, data in pairs(currentPUPData) do 
+            Note(string.format("%s %s\n",name, data))
+            end
+            --]]
+          SessionTotals.pups = SessionTotals.pups + 1
+          SessionTotals.trains = SessionTotals.trains + currentPUPData.trains
+          SessionTotals.luckytrains = SessionTotals.luckytrains + currentPUPData.luckytrains
+          SessionTotals.bonustrains = SessionTotals.bonustrains + currentPUPData.bonustrains
+          SessionTotals.practices = SessionTotals.practices + currentPUPData.practices
+          --SessionTotals. = SessionTotals. + currentPUPData.
+
+          EnableTriggerGroup("PUPCapture",false)
+        end
+
+        function reportSession()
+          for stat, data in pairs(SessionTotals) do
+            Note(string.format("%s %s\n", stat, data))
+          end
+          if SessionTotals.pups > 0 then 
+            currentTime= os.time()
+            elapsedTime = currentTime - SessionTotals.starttime
+            timePerPUP = elapsedTime / SessionTotals.pups
+            Note(string.format("You have done %s pups in %s seconds.\n At an average of %s seconds per pup.\n",
+            SessionTotals.pups, elapsedTime, timePerPUP))
+          elseif SessionTotals.levels > 0 then
+            currentTime= os.time()
+            elapsedTime = currentTime - SessionTotals.starttime
+            timePerLevel = elapsedTime / SessionTotals.levels
+            daysPL = math.floor(timePerLevel / (24*60*60))
+            timeLeft = timePerLevel % (24*60*60)
+            hoursPL = math.floor(timeLeft / 3600)
+            timeLeft = timeLeft % (60*60)
+            minutesPL = math.floor(timeLeft / 60)
+            secondsPL = timeLeft % 60
+            Note(string.format("You have done %s levels in %s days, %s hours, %s minutes and %s seconds.\n At an average of %s seconds per level.\n",
+            SessionTotals.levels, daysPL, hoursPL, minutesPL, secondsPL, timePeLevel))
+          else 
+            Note("You have not completed any levels or pups yet.\n")
+          end
+        end
+
+        function gained_level(name, line, WildCards)
+          newlevel = tonumber(WildCards["1"]) 
+          AdjustedLevel = newlevel + (MyTier*10)
+          for i, group in ipairs(MySpells[MyClass]) do
+            if AdjustedLevel >= group[1] then MySpell = group[2] end
+          end
+          SendToServer(string.format(".MySpell %s", MySpell))
+          SendToServer(string.format(".MyLevel %s", newlevel))
+          --[[
+          Note(string.format("New level is %s, effective level is %s, new spell number is %s\n",
+          newlevel, AdjustedLevel, MySpell))
+          --]]
+          --data we want to be able to save in to the session table
+          currentLevelData.leveltime = os.time()
+          currentLevelData.trains = 0
+          currentLevelData.luckytrains = 0
+          currentLevelData.bonustrains = 0
+          currentLevelData.practices = 0
+
+          EnableTriggerGroup("LevelUp", true)
+          Note("DING! start\n")
+        end
+
+        function levelGainsNormal(name, line, WildCards)
+          currentLevelData.practices = tonumber(WildCards["4"])
+          currentLevelData.trains = tonumber(WildCards["5"])
+          Note("DING! normal\n")
+        end
+
+        function levelGainsLucky(name, line, WildCards)
+          currentLevelData.luckytrains = tonumber(WildCards["1"])
+          Note("DING! lucky\n")
+        end
+
+        function levelGainsBonus(name, line, WildCards)
+          currentLevelData.bonustrains = tonumber(WildCards["1"])
+          Note("DING! bonus\n")
+        end
+
+        function levelGainsEnd(name, line, WildCards)
+          SessionTotals.levels = SessionTotals.levels + 1
+          SessionTotals.trains = SessionTotals.trains + currentLevelData.trains
+          SessionTotals.luckytrains = SessionTotals.luckytrains + currentLevelData.luckytrains
+          SessionTotals.bonustrains = SessionTotals.bonustrains + currentLevelData.bonustrains
+          SessionTotals.practices = SessionTotals.practices + currentLevelData.practices
+          EnableTriggerGroup("LevelUp", false)
+        end
+
+        function updatePlayerInfo(PlayerInfo)
+          MyTier = tonumber(PlayerInfo.tier)
+          MyClass = PlayerInfo.class
+          MySubclass = PlayerInfo.subclass
+          Note(string.format("Currently tier: %s, class: %s, subclass: %s\n", MyTier, MyClass, MySubclass))
+        end
+        
+        function OnBackgroundStartup()
+          SessionTotals.starttime = os.time()
+          SessionTotals.pups = 0
+          SessionTotals.trains = 0
+          SessionTotals.luckytrains = 0
+          SessionTotals.bonustrains = 0
+          SessionTotals.practices = 0
+          SessionTotals.levels = 0
+          --SessionTotals. = 0
+
+          EnableTriggerGroup("PUPCapture", false)
+          EnableTriggerGroup("LevelUp", false)
+        end
+
+        Note("Combat helper plugin installed.\n")
+
+        ]]>
+      </script>
+      <timers />
+    </plugin>
+  </plugins>
+</blowtorch>
+
