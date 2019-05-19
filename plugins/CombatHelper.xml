@@ -89,15 +89,16 @@
         local MySubclass = ""
         local AdjustedLevel = 0
         local MySpells = {
-        ["Psionicist"] = {{7, 127}, {9, 131}, {12, 115}, {21, 122}, {60, 354},
-        {65, 128}, {73, 136}, {94, 357}, {108, 356}, {151, 360}, {179, 362}},
+        ["Psionicist"] = {{7, "c 127"}, {9, "c 131"}, {12, "c 115"}, {21, "c 122"}, {60, "c 354"},
+        {65, "c 128"}, {94, "c 357"}, {108, "c 356"}, {151, "c 360"}, {179, "c 362"}},
         ["Warrior"] = {{1, "kick"}, {11, "bash"}, {17, "dirt"}, {27, "stun"},
-        {39, "trip"}, {50, "sap"}, {79,"spunch"}, {101, "uppercut"}, {112, "headbut"},
-        {137,"stomp"}, {151, "bodycheck"}, {178, "hammering"}},
-        ["Thief"] = {{1, "kobold"},},
+        {39, "trip"}, {50, "sap"}, {60, "scalp"}, {88, "assault"}, {101, "uppercut"},
+        {112, "headbut"}, {137,"stomp"}, {151, "bodycheck"}, {178, "hammering"}},
+        ["Thief"] = {{1, "kobold"}, {7, "kick"}, {9, "circle"}, {34, "trip"},
+        {145, "sweep"}, {181, "spiral"}},
         ["Ranger"] = {{1, "kick"},},
-        ["Mage"] = {{1, 62},},
-        ["Cleric"] = {{1, 12},},
+        ["Mage"] = {{1, "c 62"},},
+        ["Cleric"] = {{1, "c 12"},},
         ["Paladin"] = {{1, "kick"},},
         }
         local newlevel = 0
@@ -147,28 +148,41 @@
           EnableTriggerGroup("PUPCapture",false)
         end
 
+        function breakdownTime(TimeInSeconds)
+          timeTable = {}
+          timeTable.hours = math.floor(TimeInSeconds / (60*60))
+          secondsLeft = TimeInSeconds % (60*60)
+          timeTable.minutes = math.floor(secondsLeft / 60)
+          timeTable.seconds = secondsLeft % 60
+
+          return timeTable
+        end
+
         function reportSession()
-          for stat, data in pairs(SessionTotals) do
-            Note(string.format("%s %s\n", stat, data))
-          end
+          -- for stat, data in pairs(SessionTotals) do Note(string.format("%s %s\n", stat, data)) end
           if SessionTotals.pups > 0 then 
+            for stat, data in pairs(SessionTotals) do
+              Note(string.format("%s %s\n", stat, data))
+            end
             currentTime= os.time()
             elapsedTime = currentTime - SessionTotals.starttime
-            timePerPUP = elapsedTime / SessionTotals.pups
-            Note(string.format("You have done %s pups in %s seconds.\n At an average of %s seconds per pup.\n",
-            SessionTotals.pups, elapsedTime, timePerPUP))
+            timePerPUP = math.floor(elapsedTime / SessionTotals.pups)
+            local neatTime = breakdownTime(elapsedTime)
+            Note(string.format("You have done %s pups in %s hours, %s minutes and %s seconds.\n",
+            SessionTotals.pups, neatTime.hours, neatTime.minutes, neatTime.seconds))
+            neatTime = breakdownTime(timePerPUP)
+            Note(string.format("Your average time per pup is %dm:%02ds .\n",
+            neatTime.minutes, neatTime.seconds))
           elseif SessionTotals.levels > 0 then
             currentTime= os.time()
             elapsedTime = currentTime - SessionTotals.starttime
             timePerLevel = elapsedTime / SessionTotals.levels
-            daysPL = math.floor(timePerLevel / (24*60*60))
-            timeLeft = timePerLevel % (24*60*60)
-            hoursPL = math.floor(timeLeft / 3600)
-            timeLeft = timeLeft % (60*60)
-            minutesPL = math.floor(timeLeft / 60)
-            secondsPL = timeLeft % 60
-            Note(string.format("You have done %s levels in %s days, %s hours, %s minutes and %s seconds.\n At an average of %s seconds per level.\n",
-            SessionTotals.levels, daysPL, hoursPL, minutesPL, secondsPL, timePeLevel))
+            local neatTime = breakdownTime(elapsedTime)
+            Note(string.format("You have done %s levels in %dh:%02dm:%02ds.\n",
+            SessionTotals.levels, neatTime.hours, neatTime.minutes, neatTime.seconds))
+            neatTime = breakdownTime(timePerLevel)
+            Note(string.format("Your average time per level is %dh:%02dm:%02ds.\n",
+            neatTime.hours, neatTime.minutes, neatTime.seconds))
           else 
             Note("You have not completed any levels or pups yet.\n")
           end
@@ -193,8 +207,11 @@
           currentLevelData.bonustrains = 0
           currentLevelData.practices = 0
 
-          EnableTriggerGroup("LevelUp", true)
-          Note("DING! start\n")
+          -- in while we work out why triggers are broken
+          SessionTotals.levels = SessionTotals.levels + 1
+
+          EnableTriggerGroup("LevelUp", false)
+          --Note("DING! start\n")
         end
 
         function levelGainsNormal(name, line, WildCards)
@@ -220,6 +237,7 @@
           SessionTotals.bonustrains = SessionTotals.bonustrains + currentLevelData.bonustrains
           SessionTotals.practices = SessionTotals.practices + currentLevelData.practices
           EnableTriggerGroup("LevelUp", false)
+          Note("DING! off\n")
         end
 
         function updatePlayerInfo(PlayerInfo)
