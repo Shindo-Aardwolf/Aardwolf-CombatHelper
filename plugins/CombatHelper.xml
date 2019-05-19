@@ -160,7 +160,20 @@
 
         function reportSession()
           -- for stat, data in pairs(SessionTotals) do Note(string.format("%s %s\n", stat, data)) end
-          if SessionTotals.pups > 0 then 
+		  if (SessionTotals.pups > 0) and (SessionTotals.levels > 0) then
+		    for stat, data in pairs(SessionTotals) do
+			  Note(string.format("%s %s\n", stat, data))
+			end
+			currentTime = os.time()
+			elapsedTime = currentTime - SessionTotals.starttime
+			neatTime = breakdownTime(elapsedTime)
+			timePerPL = math.floor(elapsedTime / (SessionTotals.pups + SessionTotals.levels))
+		 	Note(string.format("You have done %s pups and levels in %s hours, %s minutes and %s seconds.\n",
+            (SessionTotals.pups + SessionTotals.levels), neatTime.hours, neatTime.minutes, neatTime.seconds))
+            neatTime = breakdownTime(timePerPL)
+			Note(string.format("Your average time per pup and level is %dh:%dm:%02ds .\n",
+            neatTime.hours, neatTime.minutes, neatTime.seconds))
+		  elseif SessionTotals.pups > 0 then
             for stat, data in pairs(SessionTotals) do
               Note(string.format("%s %s\n", stat, data))
             end
